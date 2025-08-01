@@ -1,34 +1,39 @@
-from flask import Flask, request, send_file, render_template
-import os, tempfile, subprocess
+import os
+from flask import Flask, render_template, request, send_file
 from pdf2docx import Converter
+import tempfile
 
 app = Flask(__name__)
 
 @app.route('/')
-def home():
+def index():
     return render_template('index.html')
 
 @app.route('/convert', methods=['POST'])
-def convert_pdf():
-    file = request.files['pdf_file']
-    if not file:
+def convert_pdf_to_word():
+    if 'pdf_file' not in request.files:
         return "No file uploaded", 400
 
+    file = request.files['pdf_file']
+
+    # Save uploaded file to Render's temporary directory
     with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as temp_pdf:
         file.save(temp_pdf.name)
-        ocr_pdf = tempfile.NamedTemporaryFile(delete=False, suffix=".pdf").name
-        docx_file = tempfile.NamedTemporaryFile(delete=False, suffix=".docx").name
+        output_path = temp_pdf.name.replace(".pdf", ".docx")
 
-        try:
-            subprocess.run(["ocrmypdf", "--skip-text", temp_pdf.name, ocr_pdf], check=True)
-            cv = Converter(ocr_pdf)
-            cv.convert(docx_file)
-            cv.close()
-            return send_file(docx_file, as_attachment=True, download_name="converted.docx")
-        finally:
-            for f in [temp_pdf.name, ocr_pdf, docx_file]:
-                if os.path.exists(f):
-                    os.remove(f)
+    try:
+        cv = Converter(temp_pdf.name)
+        cv.convert(output_path, start=0, end=None)
+        cv.close()
+        return send_file(output_path, as_attachment=True)
+    except Exception as e:
+        return f"Error: {e}", 500
+    finally:
+        # Clean up temporary files
+        if os.path.exists(temp_pdf.name):
+            os.remove(temp_pdf.name)
+        if os.path.exists(output_path):
+            os.remove(output_path)
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=10000)
