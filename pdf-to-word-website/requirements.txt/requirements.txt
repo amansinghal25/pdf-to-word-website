@@ -1,3 +1,0 @@
-flask
-pdf2docx
-ocrmypdf
